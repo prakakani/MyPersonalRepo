@@ -23,13 +23,12 @@ class D5FDFileParser:
 
         # City code field mappings by record type
         self.city_code_fields = {
-            'TAR': ['ND5FDMCT'],
+            'TAR': ['ND5FDCIC'],  # Changed from ND5FDMCT to ND5FDCIC
             'PAR': ['ND5FDMCI', 'ND5FDMCT', 'ND5FDMCY'],
             'MAR': ['ND5FDVTY'],
             'COL': ['ND5FDXTY'],
             'BOW': ['ND5FDSSS'],
         }
-
 
         # Main header fields
         self.header_fields = [
