@@ -958,11 +958,10 @@ class D5FDFileParser:
                 formatted_value = self.format_value(field_data, field_type)
                 
                 # Validate city codes
-                validation = self.validate_city_code(formatted_value, field_name, record_type)
                 if validation['is_city_field'] and not validation['is_valid']:
-                    # Highlight invalid city codes in red
-                    red_error = "\033[91m*** INVALID CITY CODE ***\033[0m"
-                    output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description} {red_error}\n")
+                    # Highlight invalid city codes with prominent markers
+                    error_marker = ">>> INVALID CITY CODE <<<"
+                    output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description} {error_marker}\n")
                 else:
                     output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
 
@@ -1012,8 +1011,7 @@ class D5FDFileParser:
         if invalid_codes:
             output_file.write("Invalid City Codes:\n")
             for code in invalid_codes:
-                red_code = f"\033[91m{code}\033[0m"
-                output_file.write(f"  ✗ {red_code}\n")
+                output_file.write(f"  ✗ >>> {code} <<< INVALID\n")
         
         if not valid_codes and not invalid_codes:
             output_file.write("No city codes found for validation.\n")
