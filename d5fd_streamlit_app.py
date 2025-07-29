@@ -9,8 +9,13 @@ st.set_page_config(page_title="Core Ticketing - BTI Data Parser", layout="wide")
 # Inject custom CSS for styling and smaller fonts
 st.markdown("""
     <style>
+        /* Completely hide all possible header elements */
         header[data-testid="stHeader"] {
             display: none !important;
+            visibility: hidden !important;
+            height: 0px !important;
+            position: absolute !important;
+            top: -9999px !important;
         }
         .stApp > header {
             display: none !important;
@@ -36,27 +41,48 @@ st.markdown("""
         .viewerBadge_container__1QSob {
             display: none !important;
         }
-        .stAppViewContainer > .main > div {
+        .stAppViewContainer > .main {
             padding-top: 0rem !important;
+        }
+        .block-container {
+            padding-top: 0rem !important;
+        }
+        .element-container:first-child {
+            margin-top: 0rem !important;
+        }
+        .stApp {
+            margin-top: 0px !important;
         }
         body {
             background-color: #f4f8fc;
+            margin-top: 0px !important;
         }
-        .main-container {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.1);
-            max-width: 100%;
-            margin: auto;
-            font-size: 14px;
+        .main-container h1 {
+            color: white !important;
+            font-size: 18px !important;
+            text-align: center !important;
+            margin: 0px !important;
+            padding: 10px 0px !important;
+            background-color: #1e3a8a !important;
+            border-radius: 2px !important;
         }
         h1 {
-            color: #2c3e50;
-            font-size: 1.0em;
-            text-align: center;
-            margin-top: 0px;
-            margin-bottom: 10px;
+            color: white !important;
+            font-size: 18px !important;
+            text-align: center !important;
+            margin: 0px !important;
+            padding: 10px 0px !important;
+            background-color: #1e3a8a !important;
+            border-radius: 2px !important;
+        }
+        h1 {
+            color: white !important;
+            font-size: 18px !important;
+            text-align: center !important;
+            margin: 0px !important;
+            padding: 10px 0px !important;
+            background-color: #007bff !important;
+            border-radius: 2px !important;
         }
         .section {
             background-color: #eaf2f8;
