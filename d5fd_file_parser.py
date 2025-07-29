@@ -12,6 +12,24 @@ import os
 class D5FDFileParser:
     def __init__(self, header_size="small"):
         self.header_size = header_size
+        # Valid city codes table
+        self.valid_city_codes = {
+            'ATL', 'LAX', 'ORD', 'DFW', 'DEN', 'JFK', 'SFO', 'LAS', 'SEA', 'CLT',
+            'MIA', 'PHX', 'IAH', 'MCO', 'EWR', 'MSP', 'DTW', 'BOS', 'PHL', 'LGA',
+            'FLL', 'BWI', 'DCA', 'MDW', 'SLC', 'HNL', 'SAN', 'TPA', 'PDX', 'STL',
+            'HOU', 'AUS', 'BNA', 'OAK', 'MSY', 'RDU', 'SMF', 'SJC', 'MCI', 'CLE',
+            'PIT', 'IND', 'CMH', 'MKE', 'BUF', 'OMA', 'JAX', 'ABQ', 'TUL', 'ONT'
+        }
+
+        # City code field mappings by record type
+        self.city_code_fields = {
+            'TAR': ['ND5FDMCT'],
+            'PAR': ['ND5FDMCI', 'ND5FDMCT', 'ND5FDMCY'],
+            'MAR': ['ND5FDVTY'],
+            'COL': ['ND5FDXTY'],
+            'BOW': ['ND5FDSSS'],
+        }
+
         # Main header fields
         self.header_fields = [
             # Standard Header (ND5FDHDR)
@@ -697,6 +715,21 @@ class D5FDFileParser:
             return self.ebcdic_to_ascii(type_data).strip()
         return "UNK"
 
+    def validate_city_code(self, city_code, field_name, record_type):
+        """Validate city code and return validation info"""
+        city_code = city_code.strip().upper()
+        
+        if record_type in self.city_code_fields:
+            if field_name in self.city_code_fields[record_type]:
+                is_valid = city_code in self.valid_city_codes
+                return {
+                    'is_city_field': True,
+                    'is_valid': is_valid,
+                    'city_code': city_code
+                }
+        
+        return {'is_city_field': False, 'is_valid': True, 'city_code': city_code}
+
     def parse_variable_data_items(self, data, start_offset, output_file):
         """Parse variable length data items (ND5FDITM)"""
         if start_offset >= len(data):
@@ -922,12 +955,67 @@ class D5FDFileParser:
                     continue
                 hex_value = field_data.hex().upper()
                 formatted_value = self.format_value(field_data, field_type)
-                output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
+                
+                # Validate city codes
+                validation = self.validate_city_code(formatted_value, field_name, record_type)
+                
+                if validation['is_city_field'] and not validation['is_valid']:
+                    # Highlight invalid city codes
+                    output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description} *** INVALID CITY CODE ***\n")
+                else:
+                    output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
 
-        # Parse variable length data items for TAR and PAR records
-        variable_offset = self.get_variable_data_offset(record_type)
-        if variable_offset and variable_offset < len(data):
-            self.parse_variable_data_items(data, variable_offset, output_file)
+            # Parse variable length data items for TAR and PAR records
+            variable_offset = self.get_variable_data_offset(record_type)
+            if variable_offset and variable_offset < len(data):
+                self.parse_variable_data_items(data, variable_offset, output_file)
+
+    def write_city_code_summary(self, data, record_type, output_file):
+        """Write city code validation summary"""
+        if record_type not in self.city_code_fields:
+            return
+            
+        output_file.write("\n" + "=" * 50 + "\n")
+        output_file.write("CITY CODE VALIDATION SUMMARY\n")
+        output_file.write("=" * 50 + "\n")
+        
+        bti_offset = 0x060
+        fields = getattr(self, f"{record_type.lower()}_fields", [])
+        if record_type == "MAR":
+            fields = self.mir_fields
+        elif record_type == "PAR":
+            fields = self.mar_fields
+        
+        invalid_codes = []
+        valid_codes = []
+        
+        for field_name, rel_offset, length, field_type, description in fields:
+            if field_name in self.city_code_fields.get(record_type, []):
+                abs_offset = bti_offset + rel_offset
+                if abs_offset + length <= len(data):
+                    field_data = data[abs_offset:abs_offset + length]
+                    if not self.is_blank_or_zero_field(field_data):
+                        formatted_value = self.format_value(field_data, field_type)
+                        validation = self.validate_city_code(formatted_value, field_name, record_type)
+                        
+                        if validation['is_valid']:
+                            valid_codes.append(f"{field_name}: {validation['city_code']}")
+                        else:
+                            invalid_codes.append(f"{field_name}: {validation['city_code']}")
+        
+        if valid_codes:
+            output_file.write("Valid City Codes:\n")
+            for code in valid_codes:
+                output_file.write(f"  ✓ {code}\n")
+        
+        if invalid_codes:
+            output_file.write("Invalid City Codes:\n")
+            for code in invalid_codes:
+                output_file.write(f"  ✗ {code}\n")
+        
+        if not valid_codes and not invalid_codes:
+            output_file.write("No city codes found for validation.\n")
+
 
     def parse_record_to_file(self, hex_input, output_file):
         try:
