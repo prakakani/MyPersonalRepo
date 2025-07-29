@@ -77,7 +77,7 @@ st.markdown("""
         }
         h1 {
             color: white !important;
-            font-size: 18px !important;
+            font-size: 25px !important;
             text-align: center !important;
             margin: 0px !important;
             padding: 10px 0px !important;
