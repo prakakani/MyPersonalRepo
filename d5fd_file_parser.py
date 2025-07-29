@@ -23,9 +23,9 @@ class D5FDFileParser:
 
         # City code field mappings by record type
         self.city_code_fields = {
-            'TAR': ['ND5FDCIC'],  # Changed from ND5FDMCT to ND5FDCIC
+            'TAR': ['ND5FDMCT'],
             'PAR': ['ND5FDMCI', 'ND5FDMCT', 'ND5FDMCY'],
-            'MAR': ['ND5FDVTY'],  # This should catch your MAR record
+            'MAR': ['ND5FDVTY'],
             'COL': ['ND5FDXTY'],
             'BOW': ['ND5FDSSS'],
         }
@@ -720,15 +720,9 @@ class D5FDFileParser:
         """Validate city code and return validation info"""
         city_code = city_code.strip().upper()
         
-        # Debug output
-        print(f"DEBUG: Checking field {field_name} in record type {record_type}")
-        print(f"DEBUG: City code value: '{city_code}'")
-        print(f"DEBUG: Is city field: {record_type in self.city_code_fields and field_name in self.city_code_fields.get(record_type, [])}")
-        
         if record_type in self.city_code_fields:
             if field_name in self.city_code_fields[record_type]:
                 is_valid = city_code in self.valid_city_codes
-                print(f"DEBUG: City code '{city_code}' is valid: {is_valid}")
                 return {
                     'is_city_field': True,
                     'is_valid': is_valid,
@@ -736,7 +730,6 @@ class D5FDFileParser:
                 }
         
         return {'is_city_field': False, 'is_valid': True, 'city_code': city_code}
-
 
     def parse_variable_data_items(self, data, start_offset, output_file):
         """Parse variable length data items (ND5FDITM)"""
