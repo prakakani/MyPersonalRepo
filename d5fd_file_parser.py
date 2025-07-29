@@ -960,7 +960,7 @@ class D5FDFileParser:
                 
                 if validation['is_city_field'] and not validation['is_valid']:
                     # Highlight invalid city codes
-                    error_marker = ">>> INVALID CITY CODE <<<"
+                    error_marker = "**********************>>> INVALID CITY CODE <<<********************************"
                     output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description} {error_marker}\n")
                 else:
                     output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
