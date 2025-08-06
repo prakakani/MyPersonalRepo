@@ -718,14 +718,11 @@ class D5FDFileParser:
         elif field_type == "PIC":
             # Handle PIC format for monetary amounts
             hex_str = field_data.hex().upper()
-            try:
-                # Extract digits from F0 prefixed bytes (F0 = EBCDIC '0', F1 = EBCDIC '1', etc.)
-                digits = ''.join([str(int(hex_str[i+1], 16)) for i in range(0, len(hex_str), 2) if hex_str[i] == 'F'])
-                if digits.isdigit() and len(digits) >= 2:
-                    value = int(digits) / 100.0  # Assume 2 decimal places
-                    return f"{value:.2f}"
-            except:
-                pass
+            # Extract digits from F0 prefixed bytes (F0 = EBCDIC '0', F1 = EBCDIC '1', etc.)
+            digits = ''.join([hex_str[i+1] for i in range(0, len(hex_str), 2) if hex_str[i] == 'F'])
+            if digits and digits.isdigit() and len(digits) >= 2:
+                value = int(digits) / 100.0  # Assume 2 decimal places
+                return f"{value:.2f}"
             return self.ebcdic_to_ascii(field_data)
         elif field_type == "BIT":
             # Special handling for Credit Card Restrictions fields
