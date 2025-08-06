@@ -687,6 +687,18 @@ class D5FDFileParser:
         elif field_type == "BIN":
             return str(int.from_bytes(field_data, 'big'))
         elif field_type == "PIC":
+            # Handle PIC(8,2) format for monetary amounts
+            if len(field_data) == 8:
+                hex_str = field_data.hex().upper()
+                # Convert F0F0F1F0F0F7F6F1 to 0010076.1 format
+                try:
+                    # Remove F0 padding and convert to decimal
+                    digits = ''.join([hex_str[i+1] for i in range(0, len(hex_str), 2) if hex_str[i:i+2].startswith('F')])
+                    if digits.isdigit() and len(digits) >= 2:
+                        value = int(digits) / 100.0  # Assume 2 decimal places
+                        return f"{value:.2f}"
+                except:
+                    pass
             return self.ebcdic_to_ascii(field_data)
         elif field_type == "BIT":
             return field_data.hex().upper()
