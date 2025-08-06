@@ -791,6 +791,42 @@ class D5FDFileParser:
             else:
                 break
 
+    def parse_itinerary_segments(self, segment_data, output_file):
+        """Parse itinerary segment data (item 74) - 26 bytes per segment"""
+        output_file.write("    Itinerary Segment Data (26 bytes per segment):\n")
+        
+        segment_length = 26
+        num_segments = len(segment_data) // segment_length
+        
+        for segment_num in range(num_segments):
+            offset = segment_num * segment_length
+            if offset + segment_length <= len(segment_data):
+                segment = segment_data[offset:offset + segment_length]
+                output_file.write(f"\n      Segment {segment_num + 1}:\n")
+                
+                # Parse each field in the 26-byte segment
+                field_offset = 0
+                segment_fields = [
+                    ("Carrier Code", 3),
+                    ("Flight Number", 4),
+                    ("Class of Service", 2),
+                    ("Departure Date", 5),
+                    ("Departure Time", 4),
+                    ("Origin City Code", 3),
+                    ("Destination City Code", 3),
+                    ("Reservation Status", 2)
+                ]
+                
+                for field_name, field_length in segment_fields:
+                    if field_offset + field_length <= len(segment):
+                        field_data = segment[field_offset:field_offset + field_length]
+                        hex_value = field_data.hex().upper()
+                        ascii_value = self.ebcdic_to_ascii(field_data)
+                        output_file.write(f"        {field_name:<20} ({field_length}): {hex_value:<12} {ascii_value}\n")
+                        field_offset += field_length
+                    else:
+                        break
+
     def parse_variable_data_items(self, data, start_offset, output_file):
         """Parse variable length data items (ND5FDITM)"""
         if start_offset >= len(data):
@@ -919,10 +955,15 @@ class D5FDFileParser:
                 output_file.write(f"  Data:         {hex_value}\n")
                 output_file.write(f"  ASCII:        {ascii_value}\n")
                 
-                # Special handling for REPS data (item 71)
-                if type_id == 71 and data_length >= 221:
+                # Special handling for REPS data (item 71 = 0x47)
+                if type_id == 0x47 and data_length >= 221:
                     output_file.write("\n")
                     self.parse_reps_data(item_data, output_file)
+                
+                # Special handling for Itinerary Segment data (item 74 = 0x4A)
+                elif type_id == 0x4A and data_length >= 26:
+                    output_file.write("\n")
+                    self.parse_itinerary_segments(item_data, output_file)
         
             # Move to next item using total length
             current_offset += total_length
