@@ -735,12 +735,12 @@ class D5FDFileParser:
         return "UNK"
 
     def parse_reps_data(self, reps_data, output_file):
-        """Parse REPS data (item 71) with 221 bytes structure"""
-        if len(reps_data) < 221:
-            output_file.write(f"    REPS Data (incomplete): {len(reps_data)} bytes\n")
+        """Parse REPS data (item 71) with up to 221 bytes structure"""
+        output_file.write(f"    REPS Data Structure ({len(reps_data)} bytes available):\n")
+        
+        if len(reps_data) == 0:
+            output_file.write("    No REPS data available\n")
             return
-            
-        output_file.write("    REPS Data Structure (221 bytes):\n")
         offset = 0
         
         # REPS field definitions
@@ -956,8 +956,9 @@ class D5FDFileParser:
                 output_file.write(f"  ASCII:        {ascii_value}\n")
                 
                 # Special handling for REPS data (item 71 = 0x47)
-                if type_id == 0x47 and data_length >= 221:
+                if type_id == 0x47:
                     output_file.write("\n")
+                    output_file.write(f"  REPS Data detected (length: {data_length} bytes)\n")
                     self.parse_reps_data(item_data, output_file)
                 
                 # Special handling for Itinerary Segment data (item 74 = 0x4A)
