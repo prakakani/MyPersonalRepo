@@ -12,24 +12,6 @@ import os
 class D5FDFileParser:
     def __init__(self, header_size="small"):
         self.header_size = header_size
-        # Valid city codes table
-        self.valid_city_codes = {
-            'ATL', 'LAX', 'ORD', 'DFW', 'DEN', 'JFK', 'SFO', 'LAS', 'SEA', 'CLT',
-            'MIA', 'PHX', 'IAH', 'MCO', 'EWR', 'MSP', 'DTW', 'BOS', 'PHL', 'LGA',
-            'FLL', 'BWI', 'DCA', 'MDW', 'SLC', 'HNL', 'SAN', 'TPA', 'PDX', 'STL',
-            'HOU', 'AUS', 'BNA', 'OAK', 'MSY', 'RDU', 'SMF', 'SJC', 'MCI', 'CLE',
-            'PIT', 'IND', 'CMH', 'MKE', 'BUF', 'OMA', 'JAX', 'ABQ', 'TUL', 'ONT'
-        }
-
-        # City code field mappings by record type
-        self.city_code_fields = {
-            'TAR': ['ND5FDCIC'],
-            'PAR': ['ND5FDMCI', 'ND5FDMCT', 'ND5FDMCY'],
-            'MAR': ['ND5FDVTY'],
-            'COL': ['ND5FDXTY'],
-            'BOW': ['ND5FDSSS'],
-        }
-
         # Main header fields
         self.header_fields = [
             # Standard Header (ND5FDHDR)
@@ -686,7 +668,20 @@ class D5FDFileParser:
         except:
             return data.hex().upper()
 
-    def format_value(self, field_data, field_type):
+    def format_value(self, field_data, field_type, field_name=None):
+        # Date fields that should use BCD conversion
+        date_fields = {"ND5FDDTE", "ND5FDXLD", "ND5FDXFD", "ND5FDXOD", "ND5FDVVD", 
+                      "ND5FDVEP", "ND5FDBNT", "ND5FDMDT", "ND5FDMFD", "ND5FDVCD", 
+                      "ND5FDDTI", "ND5FDDCI", "ND5FDFDT"}
+        
+        # Check for date field conversion
+        if field_name and field_name in date_fields and field_type == "BIN" and len(field_data) == 2:
+            binary_date = int.from_bytes(field_data, 'big')
+            if binary_date > 0:  # Only convert non-zero dates
+                return self.binary_to_bcd_date(binary_date, 7)  # Use 7-char format DDMMMYY
+            else:
+                return "0"
+        
         if field_type == "CHAR":
             return self.ebcdic_to_ascii(field_data)
         elif field_type == "BIN":
@@ -699,6 +694,30 @@ class D5FDFileParser:
             return "(SPARE)"
         else:
             return field_data.hex().upper()
+
+    def binary_to_bcd_date(self, binary_date, format_size=6):
+        """Convert binary date to BCD format"""
+        import datetime
+        
+        # December 31, 1962 is day number zero (day 1 = January 1, 1963)
+        epoch = datetime.date(1962, 12, 31)
+        target_date = epoch + datetime.timedelta(days=binary_date - 1)
+        
+        if format_size == 6:  # MMDDYY
+            return f"{target_date.month:02d}{target_date.day:02d}{target_date.year % 100:02d}"
+        else:
+            # Legacy formats for backward compatibility
+            months = "JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC"
+            month_abbr = months[target_date.month * 3 - 3:target_date.month * 3]
+            
+            if format_size == 5:  # DDMMM
+                return f"{target_date.day:02d}{month_abbr}"
+            elif format_size == 7:  # DDMMMYY
+                return f"{target_date.day:02d}{month_abbr}{target_date.year % 100:02d}"
+            elif format_size == 9:  # DDMMMYYYY
+                return f"{target_date.day:02d}{month_abbr}{target_date.year}"
+            else:
+                return f"{target_date.day:02d}{month_abbr}"
 
     def is_blank_field(self, field_data):
         """Check if field contains all EBCDIC spaces (0x40)"""
@@ -715,20 +734,62 @@ class D5FDFileParser:
             return self.ebcdic_to_ascii(type_data).strip()
         return "UNK"
 
-    def validate_city_code(self, city_code, field_name, record_type):
-        """Validate city code and return validation info"""
-        city_code = city_code.strip().upper()
+    def parse_reps_data(self, reps_data, output_file):
+        """Parse REPS data (item 71) with 221 bytes structure"""
+        if len(reps_data) < 221:
+            output_file.write(f"    REPS Data (incomplete): {len(reps_data)} bytes\n")
+            return
+            
+        output_file.write("    REPS Data Structure (221 bytes):\n")
+        offset = 0
         
-        if record_type in self.city_code_fields:
-            if field_name in self.city_code_fields[record_type]:
-                is_valid = city_code in self.valid_city_codes
-                return {
-                    'is_city_field': True,
-                    'is_valid': is_valid,
-                    'city_code': city_code
-                }
+        # REPS field definitions
+        reps_fields = [
+            ("Auth Characteristics Indicator", 1),
+            ("Validation Code", 4),
+            ("Trans ID/Banknet Reference", 9),
+            ("Auth Response/Downgrade Indicator", 2),
+            ("Auth Source Code", 1),
+            ("POS Entry Mode", 2),
+            ("Banknet Reference Date", 2),
+            ("AVS Response Code", 1),
+            ("Electronic Commerce Indicator", 2),
+            ("Cardholder Auth Verification Value", 1),
+            ("Cardholder Activation Terminal ID", 1),
+            ("Card Level Results", 2),
+            ("Acquirer Reference Data", 15),
+            ("Point of Service Data", 12),
+            ("Accounting System Code/Cardholder ID", 1),
+            ("Last Four Digits of Credit Card", 4),
+            ("Account Status Data", 1),
+            ("Spare Bytes", 9),
+            ("Token Requestor ID Data", 11),
+            ("Token Assurance Level Data", 2),
+            ("Spend Qualified Indicator", 1),
+            ("Security Protocol", 1),
+            ("Transaction Integrity Class", 2),
+            ("Payment Account Reference Number", 35),
+            ("Market Specific Auth Data Indicator", 1),
+            ("System Trace Audit Number", 6),
+            ("Transaction Data Condition Code", 2),
+            ("POS Data", 13),
+            ("Processing Code", 6),
+            ("Cardholder Authentication", 1),
+            ("Stored Credential Indicator", 1),
+            ("Account Holder Auth Value", 32),
+            ("Directory Server Transaction ID", 36),
+            ("Program Protocol", 1)
+        ]
         
-        return {'is_city_field': False, 'is_valid': True, 'city_code': city_code}
+        for field_name, field_length in reps_fields:
+            if offset + field_length <= len(reps_data):
+                field_data = reps_data[offset:offset + field_length]
+                hex_value = field_data.hex().upper()
+                ascii_value = self.ebcdic_to_ascii(field_data)
+                output_file.write(f"      {field_name:<35} ({field_length:2d}): {hex_value:<20} {ascii_value}\n")
+                offset += field_length
+            else:
+                break
 
     def parse_variable_data_items(self, data, start_offset, output_file):
         """Parse variable length data items (ND5FDITM)"""
@@ -857,6 +918,11 @@ class D5FDFileParser:
                 ascii_value = self.ebcdic_to_ascii(item_data)
                 output_file.write(f"  Data:         {hex_value}\n")
                 output_file.write(f"  ASCII:        {ascii_value}\n")
+                
+                # Special handling for REPS data (item 71)
+                if type_id == 71 and data_length >= 221:
+                    output_file.write("\n")
+                    self.parse_reps_data(item_data, output_file)
         
             # Move to next item using total length
             current_offset += total_length
@@ -894,7 +960,7 @@ class D5FDFileParser:
             if offset + length <= len(data):
                 field_data = data[offset:offset + length]
                 hex_value = field_data.hex().upper()
-                formatted_value = self.format_value(field_data, field_type)
+                formatted_value = self.format_value(field_data, field_type, field_name)
                 output_file.write(f"{field_name:<{config.get('field_width', 8)}} {offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
 
 
@@ -954,17 +1020,8 @@ class D5FDFileParser:
                 if self.is_blank_or_zero_field(field_data):
                     continue
                 hex_value = field_data.hex().upper()
-                formatted_value = self.format_value(field_data, field_type)
-                
-                # Validate city codes
-                validation = self.validate_city_code(formatted_value, field_name, record_type)
-                
-                if validation['is_city_field'] and not validation['is_valid']:
-                    # Highlight invalid city codes
-                    error_marker = "**********************>>> INVALID CITY CODE <<<********************************"
-                    output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description} {error_marker}\n")
-                else:
-                    output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
+                formatted_value = self.format_value(field_data, field_type, field_name)
+                output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
 
         # Parse variable length data items for TAR and PAR records
         variable_offset = self.get_variable_data_offset(record_type)
