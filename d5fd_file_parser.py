@@ -668,6 +668,35 @@ class D5FDFileParser:
         except:
             return data.hex().upper()
 
+    def parse_credit_card_restrictions(self, field_data):
+        """Parse Credit Card Restrictions bit field"""
+        if len(field_data) != 1:
+            return "Invalid length"
+            
+        byte_value = field_data[0]
+        restrictions = []
+        
+        # Bit mappings for Credit Card Restrictions
+        bit_mappings = {
+            0x80: "World Pay Restricted Country",  # Bit 0
+            0x40: "Elavon",                        # Bit 1  
+            0x20: "American Express",              # Bit 2
+            0x10: "Visa",                          # Bit 3
+            0x08: "Chase (Bank)",                  # Bit 4
+            0x04: "Converge",                      # Bit 5
+            0x02: "SITA",                          # Bit 6
+            0x01: "World Pay Currency"             # Bit 7
+        }
+        
+        for bit_mask, description in bit_mappings.items():
+            if byte_value & bit_mask:
+                restrictions.append(description)
+        
+        if restrictions:
+            return f"0x{byte_value:02X} ({', '.join(restrictions)})"
+        else:
+            return f"0x{byte_value:02X} (No restrictions)"
+
     def format_value(self, field_data, field_type, field_name=None):
         # Date fields that should use BCD conversion
         date_fields = {"ND5FDDTE", "ND5FDXLD", "ND5FDXFD", "ND5FDXOD", "ND5FDVVD", 
@@ -687,20 +716,21 @@ class D5FDFileParser:
         elif field_type == "BIN":
             return str(int.from_bytes(field_data, 'big'))
         elif field_type == "PIC":
-            # Handle PIC(8,2) format for monetary amounts
-            if len(field_data) == 8:
-                hex_str = field_data.hex().upper()
-                # Convert F0F0F1F0F0F7F6F1 to 0010076.1 format
-                try:
-                    # Remove F0 padding and convert to decimal
-                    digits = ''.join([hex_str[i+1] for i in range(0, len(hex_str), 2) if hex_str[i:i+2].startswith('F')])
-                    if digits.isdigit() and len(digits) >= 2:
-                        value = int(digits) / 100.0  # Assume 2 decimal places
-                        return f"{value:.2f}"
-                except:
-                    pass
+            # Handle PIC format for monetary amounts
+            hex_str = field_data.hex().upper()
+            try:
+                # Extract digits from F0 prefixed bytes (F0 = EBCDIC '0', F1 = EBCDIC '1', etc.)
+                digits = ''.join([str(int(hex_str[i+1], 16)) for i in range(0, len(hex_str), 2) if hex_str[i] == 'F'])
+                if digits.isdigit() and len(digits) >= 2:
+                    value = int(digits) / 100.0  # Assume 2 decimal places
+                    return f"{value:.2f}"
+            except:
+                pass
             return self.ebcdic_to_ascii(field_data)
         elif field_type == "BIT":
+            # Special handling for Credit Card Restrictions fields
+            if field_name and "CCP" in field_name or "CRD" in field_name or "ARF" in field_name:
+                return self.parse_credit_card_restrictions(field_data)
             return field_data.hex().upper()
         elif field_type == "SPARE":
             return "(SPARE)"
