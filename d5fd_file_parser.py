@@ -34,7 +34,7 @@ class D5FDFileParser:
             # System Security Controls (ND5FDSSC)
             ("ND5FDRTI", 0x030, 1, "BIT", "RETRANSMIT INDICATOR"),
             ("ND5FDEXT", 0x031, 1, "CHAR", "XT TAXES ELIMINATED"),
-            ("ND5FDMUR", 0x032, 1, "CHAR", "BARTS USER INDICATOR"),
+            ("ND5FDMUR", 0x032, 1, "CHAR", "BARTS USER INDICATOR (Y=BARTS USER, N=NON-BARTS USER)"),
             ("SPARE2", 0x033, 1, "SPARE", "SPARE"),
             ("ND5FDH01", 0x034, 4, "BIN", "HASHTOTAL #1"),
             ("ND5FDH02", 0x038, 4, "BIN", "HASHTOTAL #2"),
@@ -86,7 +86,7 @@ class D5FDFileParser:
             ("SPARE_TAR7", 0x07B, 1, "SPARE", "SPARE BYTE"),
             ("ND5FDIAC", 0x07C, 2, "CHAR", "ISSUING AIRLINE CODE"),
             ("SPARE_TAR8", 0x07E, 1, "SPARE", "SPARE - AIRLINE CODE EXPANSION"),
-            ("ND5FDFPP", 0x07F, 1, "CHAR", "PURPOSE OF FOP"),
+            ("ND5FDFPP", 0x07F, 1, "CHAR", "PURPOSE OF FOP (T=Ticketing, A=Additional Collection, R=Refund, E=Even Exchange with PFC, 0x00=Even Exchange)"),
             ("ND5FDPTP", 0x080, 1, "CHAR", "PASSENGER TYPE CODE (PTC)"),
             ("SPARE_TAR9", 0x081, 7, "SPARE", "SPARE BYTES"),
             ("ND5FDTDF", 0x088, 1, "CHAR", "TICKET DATA ITEM AREA"),
@@ -664,7 +664,11 @@ class D5FDFileParser:
 
     def ebcdic_to_ascii(self, data):
         try:
-            return codecs.decode(data, 'cp037', errors='replace').rstrip('\x00').rstrip(' ')
+            ascii_result = codecs.decode(data, 'cp037', errors='replace')
+            # For single byte fields, if it's null or non-printable, show hex
+            if len(data) == 1 and (data[0] == 0x00 or ascii_result == '\x00' or not ascii_result.isprintable()):
+                return f"0x{data[0]:02X}"
+            return ascii_result.rstrip('\x00').rstrip(' ')
         except:
             return data.hex().upper()
 
@@ -697,6 +701,32 @@ class D5FDFileParser:
         else:
             return f"0x{byte_value:02X} (No restrictions)"
 
+    def get_field_definition(self, field_name, field_value):
+        """Get detailed field definitions with value meanings"""
+        definitions = {
+            "ND5FDMUR": {
+                "Y": "BARTS USER",
+                "N": "NON-BARTS USER",
+                "0x00": "NULL/UNDEFINED"
+            },
+            "ND5FDFPP": {
+                "T": "Ticketing",
+                "A": "Additional Collection", 
+                "R": "Refund",
+                "E": "Even Exchange with PFC involved",
+                "0x00": "Even Exchange"
+            },
+            "ND5FDETK": {
+                "E": "Electronic Document",
+                "P": "Paper Document",
+                "0x00": "Not Specified"
+            }
+        }
+        
+        if field_name in definitions:
+            return definitions[field_name].get(field_value, f"Unknown value: {field_value}")
+        return None
+
     def format_value(self, field_data, field_type, field_name=None):
         if len(field_data) == 0:
             return "N/A"
@@ -716,12 +746,10 @@ class D5FDFileParser:
         
         if field_type == "CHAR":
             ascii_val = self.ebcdic_to_ascii(field_data)
-            # For single character fields, show actual value not interpretation
-            if len(field_data) == 1 and field_name:
-                if field_name == "ND5FDETK":
-                    return ascii_val  # Show actual character, not "ELECTRONIC"
-                elif field_name == "ND5FDMUR":
-                    return ascii_val  # Show actual character (Y/N), not "BARTS"
+            # Add field definition if available
+            definition = self.get_field_definition(field_name, ascii_val)
+            if definition:
+                return f"{ascii_val} ({definition})"
             return ascii_val
         elif field_type == "BIN":
             return str(int.from_bytes(field_data, 'big'))
