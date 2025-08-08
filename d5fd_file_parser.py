@@ -698,6 +698,9 @@ class D5FDFileParser:
             return f"0x{byte_value:02X} (No restrictions)"
 
     def format_value(self, field_data, field_type, field_name=None):
+        if len(field_data) == 0:
+            return "N/A"
+            
         # Date fields that should use BCD conversion
         date_fields = {"ND5FDDTE", "ND5FDXLD", "ND5FDXFD", "ND5FDXOD", "ND5FDVVD", 
                       "ND5FDVEP", "ND5FDBNT", "ND5FDMDT", "ND5FDMFD", "ND5FDVCD", 
@@ -712,7 +715,14 @@ class D5FDFileParser:
                 return "0"
         
         if field_type == "CHAR":
-            return self.ebcdic_to_ascii(field_data)
+            ascii_val = self.ebcdic_to_ascii(field_data)
+            # For single character fields, show actual value not interpretation
+            if len(field_data) == 1 and field_name:
+                if field_name == "ND5FDETK":
+                    return ascii_val  # Show actual character, not "ELECTRONIC"
+                elif field_name == "ND5FDMUR":
+                    return ascii_val  # Show actual character (Y/N), not "BARTS"
+            return ascii_val
         elif field_type == "BIN":
             return str(int.from_bytes(field_data, 'big'))
         elif field_type == "PIC":
@@ -1043,6 +1053,8 @@ class D5FDFileParser:
                 hex_value = field_data.hex().upper()
                 formatted_value = self.format_value(field_data, field_type, field_name)
                 output_file.write(f"{field_name:<{config.get('field_width', 8)}} {offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
+            else:
+                output_file.write(f"{field_name:<{config.get('field_width', 8)}} {offset:04X}h {length:<{config.get('length_width', 4)}} {'<DATA NOT PRESENT>':<{config['hex_width']}} {'N/A':<{config['value_width']}} {description}\n")
 
 
     def parse_bti_structure(self, data, record_type, output_file):
@@ -1103,6 +1115,8 @@ class D5FDFileParser:
                 hex_value = field_data.hex().upper()
                 formatted_value = self.format_value(field_data, field_type, field_name)
                 output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {hex_value:<{config['hex_width']}} {formatted_value:<{config['value_width']}} {description}\n")
+            else:
+                output_file.write(f"{field_name:<{config.get('field_width', 8)}} {abs_offset:04X}h {length:<{config.get('length_width', 4)}} {'<DATA NOT PRESENT>':<{config['hex_width']}} {'N/A':<{config['value_width']}} {description}\n")
 
         # Parse variable length data items for TAR and PAR records
         variable_offset = self.get_variable_data_offset(record_type)
