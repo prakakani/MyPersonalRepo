@@ -984,9 +984,11 @@ class D5FDFileParser:
         }
         
         config = self.get_header_config()
-        output_file.write("\n" + "=" * config["sep_width"] + "\n")
+        # Calculate actual width for variable data items section
+        actual_width = 80  # Fixed width for variable data items section
+        output_file.write("\n" + "=" * actual_width + "\n")
         output_file.write("VARIABLE LENGTH DATA ITEMS (ND5FDITM)\n")
-        output_file.write("=" * config["sep_width"] + "\n")
+        output_file.write("=" * actual_width + "\n")
 
         current_offset = start_offset
         item_count = 0
@@ -1072,11 +1074,16 @@ class D5FDFileParser:
 
     def parse_header(self, data, output_file):
         config = self.get_header_config()
-        output_file.write("=" * config["sep_width"] + "\n")
+        # Calculate actual table width based on column widths
+        actual_width = (config.get('field_width', 8) + config.get('offset_width', 6) + 
+                       config.get('length_width', 4) + config['hex_width'] + 
+                       config['value_width'] + 50)  # 50 for description and spacing
+        
+        output_file.write("=" * actual_width + "\n")
         output_file.write("HEADER FIELDS\n")
-        output_file.write("=" * config["sep_width"] + "\n")
+        output_file.write("=" * actual_width + "\n")
         output_file.write(f"{'Field':<{config.get('field_width', 8)}} {'Offset':<{config.get('offset_width', 6)}} {'Len':<{config.get('length_width', 4)}} {'Hex':<{config['hex_width']}} {'Value':<{config['value_width']}} {'Description'}\n")
-        output_file.write("-" * config["table_width"] + "\n")
+        output_file.write("-" * actual_width + "\n")
 
         for field_name, offset, length, field_type, description in self.header_fields:
             if offset + length <= len(data):
@@ -1092,11 +1099,16 @@ class D5FDFileParser:
         config = self.get_header_config()
         bti_offset = 0x060
         
-        output_file.write("\n" + "=" * config["sep_width"] + "\n")
+        # Calculate actual table width
+        actual_width = (config.get('field_width', 8) + config.get('offset_width', 6) + 
+                       config.get('length_width', 4) + config['hex_width'] + 
+                       config['value_width'] + 50)  # 50 for description and spacing
+        
+        output_file.write("\n" + "=" * actual_width + "\n")
         output_file.write(f"ND5FDBTI STRUCTURE - TYPE: {record_type}\n")
-        output_file.write("=" * config["sep_width"] + "\n")
+        output_file.write("=" * actual_width + "\n")
         output_file.write(f"{'Field':<{config.get('field_width', 8)}} {'Offset':<{config.get('offset_width', 6)}} {'Len':<{config.get('length_width', 4)}} {'Hex':<{config['hex_width']}} {'Value':<{config['value_width']}} {'Description'}\n")
-        output_file.write("-" * config["table_width"] + "\n")
+        output_file.write("-" * actual_width + "\n")
 
         if record_type in ["TAR", "NBT"]:
             fields = self.tar_fields
@@ -1166,7 +1178,10 @@ class D5FDFileParser:
             self.parse_bti_structure(data, record_type, output_file)
             
             config = self.get_header_config()
-            output_file.write("\n" + "=" * config["sep_width"] + "\n")
+            actual_width = (config.get('field_width', 8) + config.get('offset_width', 6) + 
+                           config.get('length_width', 4) + config['hex_width'] + 
+                           config['value_width'] + 50)
+            output_file.write("\n" + "=" * actual_width + "\n")
             
         except Exception as e:
             output_file.write(f"Error parsing record: {e}\n")
