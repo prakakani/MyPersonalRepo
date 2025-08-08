@@ -665,8 +665,11 @@ class D5FDFileParser:
     def ebcdic_to_ascii(self, data):
         try:
             ascii_result = codecs.decode(data, 'cp037', errors='replace')
-            # For single byte fields, if it's null or non-printable, show hex
-            if len(data) == 1 and (data[0] == 0x00 or ascii_result == '\x00' or not ascii_result.isprintable()):
+            # For single byte fields, if it's null, show as '0'
+            if len(data) == 1 and data[0] == 0x00:
+                return '0'
+            # For other non-printable single bytes, show hex
+            if len(data) == 1 and (ascii_result == '\x00' or not ascii_result.isprintable()):
                 return f"0x{data[0]:02X}"
             return ascii_result.rstrip('\x00').rstrip(' ')
         except:
@@ -707,24 +710,24 @@ class D5FDFileParser:
             "ND5FDMUR": {
                 "Y": "BARTS USER",
                 "N": "NON-BARTS USER",
-                "0x00": "NULL/UNDEFINED"
+                "0": "Not Set"
             },
             "ND5FDFPP": {
                 "T": "Ticketing",
                 "A": "Additional Collection", 
                 "R": "Refund",
                 "E": "Even Exchange with PFC involved",
-                "0x00": "Even Exchange"
+                "0": "Even Exchange"
             },
             "ND5FDETK": {
                 "E": "Electronic Document",
                 "P": "Paper Document",
-                "0x00": "Not Specified"
+                "0": "Not Specified"
             }
         }
         
         if field_name in definitions:
-            return definitions[field_name].get(field_value, f"Unknown value: {field_value}")
+            return definitions[field_name].get(field_value, None)
         return None
 
     def format_value(self, field_data, field_type, field_name=None):
